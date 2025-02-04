@@ -7,14 +7,24 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/narravabrion/go-cms-server/internal/store"
 )
 
 type api struct {
 	config config
+	store  store.Storage
 }
 
 type config struct {
 	addr string
+	db   dbConfig
+}
+
+type dbConfig struct {
+	connString   string
+	maxOpenConns int
+	maxIdleConns int
+	maxIdleTIme  time.Duration
 }
 
 func (api *api) muxHandler() http.Handler {
