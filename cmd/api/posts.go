@@ -18,8 +18,8 @@ type CreatePostPayload struct {
 }
 
 type UpdatePostPayload struct {
-	Title   *string `json:"title" validate:"omitempty, max=100"`
-	Content *string `json:"content" validate:"omitempty, max=2000"`
+	Title   *string `json:"title" validate:"omitempty,max=100"`
+	Content *string `json:"content" validate:"omitempty,max=2000"`
 }
 
 func (api *api) createPostHandler(w http.ResponseWriter, r *http.Request) {
@@ -117,10 +117,10 @@ func (api *api) updatePostHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if payload.Title != nil {
-		payload.Title = *&payload.Title
+		post.Title = *payload.Title
 	}
 	if payload.Content != nil {
-		payload.Content = *&payload.Content
+		post.Content = *payload.Content
 	}
 
 	if err := api.store.Posts.Update(r.Context(), post); err != nil {
@@ -152,10 +152,10 @@ func (api *api) postContextMiddleware(next http.Handler) http.Handler {
 			}
 			return
 		}
-		if err := writeJSON(w, http.StatusOK, post); err != nil {
-			writeJSONError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
+		// if err := writeJSON(w, http.StatusOK, post); err != nil {
+		// 	writeJSONError(w, http.StatusInternalServerError, err.Error())
+		// 	return
+		// }
 		ctx = context.WithValue(ctx, "post", post)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})

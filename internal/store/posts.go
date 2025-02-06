@@ -81,7 +81,7 @@ func (ps *PostStore) Delete(ctx context.Context, id int64) error {
 }
 
 func (ps *PostStore) Update(ctx context.Context, post *models.Post) error {
-	query := `UPDATE posts SET title =$1t, content = $2 WHERE id= $3`
+	query := `UPDATE posts SET title =$1, content = $2 WHERE id= $3`
 	_, err := ps.db.ExecContext(ctx, query, post.Title, post.Content, post.ID)
 	if err != nil {
 		return err
