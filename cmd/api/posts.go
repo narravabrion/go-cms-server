@@ -48,7 +48,7 @@ func (api *api) createPostHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := writeJSON(w, http.StatusCreated, post); err != nil {
+	if err := api.jsonResponse(w, http.StatusCreated, post); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -57,24 +57,7 @@ func (api *api) createPostHandler(w http.ResponseWriter, r *http.Request) {
 
 func (api *api) getPostHandler(w http.ResponseWriter, r *http.Request) {
 	post := getPostFromCtx(r)
-	// idParam := chi.URLParam(r, "postID")
-	// id, err := strconv.ParseInt(idParam, 10, 64)
-	// if err != nil {
-	// 	writeJSONError(w, http.StatusInternalServerError, err.Error())
-	// }
-	// ctx := r.Context()
-	// post, err := api.store.Posts.GetByID(ctx, id)
-
-	// if err != nil {
-	// 	switch {
-	// 	case errors.Is(err, store.ErrNotFound):
-	// 		writeJSONError(w, http.StatusNotFound, err.Error())
-	// 	default:
-	// 		writeJSONError(w, http.StatusInternalServerError, err.Error())
-	// 	}
-	// 	return
-	// }
-	if err := writeJSON(w, http.StatusOK, post); err != nil {
+	if err := api.jsonResponse(w, http.StatusOK, post); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -127,7 +110,7 @@ func (api *api) updatePostHandler(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	if err := writeJSON(w, http.StatusOK, post); err != nil {
+	if err := api.jsonResponse(w, http.StatusOK, post); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -152,10 +135,6 @@ func (api *api) postContextMiddleware(next http.Handler) http.Handler {
 			}
 			return
 		}
-		// if err := writeJSON(w, http.StatusOK, post); err != nil {
-		// 	writeJSONError(w, http.StatusInternalServerError, err.Error())
-		// 	return
-		// }
 		ctx = context.WithValue(ctx, "post", post)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})

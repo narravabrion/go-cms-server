@@ -4,13 +4,14 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"time"
 
 	"github.com/lib/pq"
 	"github.com/narravabrion/go-cms-server/internal/models"
 )
 
-type Post struct {
-}
+// type Post struct {
+// }
 
 type PostStore struct {
 	db *sql.DB
@@ -18,6 +19,8 @@ type PostStore struct {
 
 func (ps *PostStore) Create(ctx context.Context, post *models.Post) error {
 	query := `INSERT INTO posts (title, content, user_id, tags) VALUES ($1, $2, $3, $4) RETURNING id, created_at, updated_at`
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
 	err := ps.db.QueryRowContext(
 		ctx,
 		query,
@@ -38,7 +41,9 @@ func (ps *PostStore) Create(ctx context.Context, post *models.Post) error {
 }
 
 func (ps *PostStore) GetByID(ctx context.Context, id int64) (*models.Post, error) {
-	query := `SELECT id, user_id, title, content, created_at, updated_at, tags FROM posts WHERE id=$1`
+	query := `SELECT id, user_id, title, content, created_at, updated_at, tags, version FROM posts WHERE id=$1`
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
 	var post models.Post
 	err := ps.db.QueryRowContext(ctx, query, id).Scan(
 		&post.ID,
@@ -48,6 +53,7 @@ func (ps *PostStore) GetByID(ctx context.Context, id int64) (*models.Post, error
 		&post.CreatedAt,
 		&post.UpdatedAt,
 		pq.Array(&post.Tags),
+		&post.Version,
 	)
 	if err != nil {
 		switch {
@@ -62,7 +68,8 @@ func (ps *PostStore) GetByID(ctx context.Context, id int64) (*models.Post, error
 
 func (ps *PostStore) Delete(ctx context.Context, id int64) error {
 	query := `DELETE FROM posts WHERE id=$1`
-	// var post models.Post
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
 
 	result, err := ps.db.ExecContext(ctx, query, id)
 
@@ -81,10 +88,60 @@ func (ps *PostStore) Delete(ctx context.Context, id int64) error {
 }
 
 func (ps *PostStore) Update(ctx context.Context, post *models.Post) error {
-	query := `UPDATE posts SET title =$1, content = $2 WHERE id= $3`
-	_, err := ps.db.ExecContext(ctx, query, post.Title, post.Content, post.ID)
+	query := `UPDATE posts SET title =$1, content = $2, version = version + 1 WHERE id= $3 AND version = $4 RETURNING version`
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	err := ps.db.QueryRowContext(ctx, query, post.Title, post.Content, post.ID, post.Version).Scan(
+		&post.Version)
 	if err != nil {
-		return err
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			return ErrNotFound
+		default:
+			return err
+		}
 	}
 	return nil
+}
+
+func (ps *PostStore) GetUserFeed(ctx context.Context, userID int64) ([]models.Post, error) {
+	query := `
+	
+		SELECT 
+			p.id, p.user_id, p.title, p.content, p.created_at, p.version, p.tags, u.username 
+		FROM posts p 
+		LEFT JOIN users u on p.user_id = u.id 
+		JOIN followers f ON f.follower_id = p.user_id OR p.user_id = $1
+		WHERE f.user_id = $1 OR P.user_id = $1
+		GROUP BY p.id, u.username
+		ORDER BY p.created_at DESC LIMIT 20
+		`
+
+	rows, err := ps.db.QueryContext(ctx, query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var feed []models.Post
+
+	for rows.Next() {
+		var post models.Post
+		err := rows.Scan(
+			&post.ID ,
+			&post.UserID, 
+			&post.Title, 
+			&post.Content, 
+			&post.CreatedAt, 
+			&post.Version,
+			pq.Array(&post.Tags),
+			&post.User,
+		)
+		if err != nil {
+			return nil, err
+		}
+		feed = append(feed, post)
+	}
+ 
+	return feed, nil
 }

@@ -37,10 +37,10 @@ func main() {
 	}
 	log.Println("connected to Db!")
 	store := store.NewStrorage(db)
-	app := &api{
+	api := &api{
 		config: config,
 		store:  store,
 	}
 
-	log.Fatal(app.run(app.muxHandler()))
+	log.Fatal(api.run(api.muxHandler()))
 }

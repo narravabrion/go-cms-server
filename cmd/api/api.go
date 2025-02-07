@@ -49,6 +49,19 @@ func (api *api) muxHandler() http.Handler {
 				r.Patch("/", api.updatePostHandler)
 			})
 		})
+		r.Route("/users", func(r chi.Router) {
+			r.Route("/{userID}", func(r chi.Router) {
+				r.Use(api.userContextMiddleware)
+				r.Get("/", api.getUserHandler)
+				r.Delete("/", api.deleteUserHandler)
+				r.Patch("/", api.updateUserHandler)
+				r.Put("/follow", api.followUserHandler)
+				r.Put("/unfollow", api.unfollowUserHandler)
+			})
+			r.Group(func(r chi.Router){
+				r.Get("/feed", api.getUserFeedHandler)
+			})
+		})
 	})
 
 	return r

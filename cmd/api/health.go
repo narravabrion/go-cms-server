@@ -11,7 +11,7 @@ func (api *api) healthCheckHandler(w http.ResponseWriter, r *http.Request) {
 		"env":    api.config.env,
 	}
 
-	if err := writeJSON(w, http.StatusOK, data); err != nil {
+	if err := api.jsonResponse(w, http.StatusOK, data); err != nil {
 		writeJSONError(w, http.StatusOK, err.Error())
 	}
 }
