@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"log"
 	"time"
 
 	"github.com/lib/pq"
@@ -105,6 +106,7 @@ func (ps *PostStore) Update(ctx context.Context, post *models.Post) error {
 }
 
 func (ps *PostStore) GetUserFeed(ctx context.Context, userID int64) ([]models.Post, error) {
+	log.Print("get user feed")
 	query := `
 	
 		SELECT 
@@ -114,16 +116,18 @@ func (ps *PostStore) GetUserFeed(ctx context.Context, userID int64) ([]models.Po
 		JOIN followers f ON f.follower_id = p.user_id OR p.user_id = $1
 		WHERE f.user_id = $1 OR P.user_id = $1
 		GROUP BY p.id, u.username
-		ORDER BY p.created_at DESC LIMIT 20
 		`
 
 	rows, err := ps.db.QueryContext(ctx, query, userID)
+	log.Printf("rows: %+v", rows)
+	log.Printf("err: %d", userID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
 	var feed []models.Post
+	var user models.User
 
 	for rows.Next() {
 		var post models.Post
@@ -135,7 +139,7 @@ func (ps *PostStore) GetUserFeed(ctx context.Context, userID int64) ([]models.Po
 			&post.CreatedAt, 
 			&post.Version,
 			pq.Array(&post.Tags),
-			&post.User,
+			&user.Username,
 		)
 		if err != nil {
 			return nil, err
