@@ -105,7 +105,7 @@ func (ps *PostStore) Update(ctx context.Context, post *models.Post) error {
 	return nil
 }
 
-func (ps *PostStore) GetUserFeed(ctx context.Context, userID int64) ([]models.Post, error) {
+func (ps *PostStore) GetUserFeed(ctx context.Context, userID int64, fq PaginationFeedQuery) ([]models.Post, error) {
 	log.Print("get user feed")
 	query := `
 	
@@ -114,11 +114,15 @@ func (ps *PostStore) GetUserFeed(ctx context.Context, userID int64) ([]models.Po
 		FROM posts p 
 		LEFT JOIN users u on p.user_id = u.id 
 		JOIN followers f ON f.follower_id = p.user_id OR p.user_id = $1
-		WHERE f.user_id = $1 OR P.user_id = $1
+		WHERE 
+			f.user_id = $1 AND 
+			(p.tags @> $2 OR $2 = '{}')
 		GROUP BY p.id, u.username
+		ORDER BY p.created_at ` + fq.Sort + `
+		LIMIT $3 OFFSET $4
 		`
 
-	rows, err := ps.db.QueryContext(ctx, query, userID)
+	rows, err := ps.db.QueryContext(ctx, query, userID, pq.Array(fq.Tags), fq.Limit, fq.Offset)
 	log.Printf("rows: %+v", rows)
 	log.Printf("err: %d", userID)
 	if err != nil {
@@ -132,11 +136,11 @@ func (ps *PostStore) GetUserFeed(ctx context.Context, userID int64) ([]models.Po
 	for rows.Next() {
 		var post models.Post
 		err := rows.Scan(
-			&post.ID ,
-			&post.UserID, 
-			&post.Title, 
-			&post.Content, 
-			&post.CreatedAt, 
+			&post.ID,
+			&post.UserID,
+			&post.Title,
+			&post.Content,
+			&post.CreatedAt,
 			&post.Version,
 			pq.Array(&post.Tags),
 			&user.Username,
@@ -146,6 +150,6 @@ func (ps *PostStore) GetUserFeed(ctx context.Context, userID int64) ([]models.Po
 		}
 		feed = append(feed, post)
 	}
- 
+
 	return feed, nil
 }
