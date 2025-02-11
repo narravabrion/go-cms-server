@@ -15,6 +15,20 @@ type FollowerUser struct {
 	UserID int64 `json:"user_id"`
 }
 
+
+// ShowAccount godoc
+//	@Summary		Fetches user profile
+//	@Description	gets the user by userID
+//	@Tags			users
+//	@Accept			json
+//	@Produce		json
+//	@Param			id	path		int	true	"User ID"
+//	@Success		200	{object}	models.User
+//	@Failure		400	{object}	error
+//	@Failure		404	{object}	error
+//	@Failure		500	{object}	error
+//	@Security		ApiKeyAuth
+//	@Router			/users/{id} [get]
 func (api *api) getUserHandler(w http.ResponseWriter, r *http.Request) {
 	user := getUserFromCtx(r)
 	if err := api.jsonResponse(w, http.StatusOK, user); err != nil {
