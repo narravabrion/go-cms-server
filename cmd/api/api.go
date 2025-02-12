@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 	"time"
 
@@ -25,6 +24,11 @@ type config struct {
 	db     dbConfig
 	env    string
 	apiURL string
+	mail   mailConfig
+}
+
+type mailConfig struct {
+	exp time.Duration
 }
 
 type dbConfig struct {
@@ -47,7 +51,6 @@ func (api *api) muxHandler() http.Handler {
 	r.Route("/v1", func(r chi.Router) {
 		r.Get("/health", api.healthCheckHandler)
 		docsURL := fmt.Sprintf("%s/swagger/doc.json", api.config.addr)
-		log.Printf("docsURl: %s", docsURL)
 		r.Get("/swagger/*", httpSwagger.Handler(httpSwagger.URL(docsURL)))
 		r.Route("/posts", func(r chi.Router) {
 			r.Post("/", api.createPostHandler)
@@ -59,6 +62,7 @@ func (api *api) muxHandler() http.Handler {
 			})
 		})
 		r.Route("/users", func(r chi.Router) {
+			r.Put("/activate/{token}",api.activateUserHandler)
 			r.Route("/{userID}", func(r chi.Router) {
 				r.Use(api.userContextMiddleware)
 				r.Get("/", api.getUserHandler)
@@ -70,6 +74,9 @@ func (api *api) muxHandler() http.Handler {
 			r.Group(func(r chi.Router) {
 				r.Get("/feed", api.getUserFeedHandler)
 			})
+		})
+		r.Route("/auth", func(r chi.Router) {
+			r.Post("/user", api.registerUserHandler)
 		})
 	})
 
@@ -90,7 +97,6 @@ func (api *api) run(mux http.Handler) error {
 		ReadTimeout:  15 * time.Second,
 		IdleTimeout:  3 * time.Minute,
 	}
-	log.Printf("server started on port %s", api.config.addr)
 	api.logger.Infow("server started", "addr", api.config.addr, "env", api.config.env)
 	return server.ListenAndServe()
 }

@@ -15,8 +15,8 @@ type FollowerUser struct {
 	UserID int64 `json:"user_id"`
 }
 
-
 // ShowAccount godoc
+//
 //	@Summary		Fetches user profile
 //	@Description	gets the user by userID
 //	@Tags			users
@@ -109,6 +109,24 @@ func (api *api) unfollowUserHandler(w http.ResponseWriter, r *http.Request) {
 	if err := api.jsonResponse(w, http.StatusNoContent, nil); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, err.Error())
 		return
+	}
+}
+
+func (api *api) activateUserHandler(w http.ResponseWriter, r *http.Request) {
+	token := chi.URLParam(r, "token")
+	ctx := r.Context()
+	if err := api.store.Users.Activate(ctx, token); err != nil {
+		switch err {
+		case store.ErrNotFound:
+			writeJSONError(w, http.StatusBadRequest, err.Error())
+			return
+		default:
+			writeJSONError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+	if err := writeJson(w, http.StatusNoContent, ""); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, err.Error())
 	}
 }
 

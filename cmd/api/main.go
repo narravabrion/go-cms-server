@@ -46,6 +46,10 @@ func main() {
 			maxIdleConns: env.GetIntEnv("DB_MAX_IDLE_CONNS", 10),
 			maxIdleTIme:  env.GetTimeEnv("DB_MAX_IDLE_TIME", 15*time.Minute),
 		},
+		env: env.GetStringEnv("ENV", "development"),
+		mail : mailConfig{
+			exp: 3 * 3 *time.Hour,
+		},
 	}
 
 	db, err := db.New(
