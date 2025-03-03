@@ -63,19 +63,41 @@ func (us *UserStore) GetByID(ctx context.Context, id int64) (*models.User, error
 	return &user, nil
 }
 
-func (us *UserStore) Delete(ctx context.Context, id int64) error {
+func (us *UserStore) Delete(ctx context.Context, userID int64) error {
+	return withTx(us.db, ctx, func(tx *sql.Tx) error {
+		if err := us.delete(ctx, tx, userID); err != nil {
+			return err
+		}
+		if err := us.deleteUserInvitation(ctx, tx, userID); err != nil {
+			return err
+		}
+		return nil
+	})
+}
+
+// check delete method conflict
+func (us *UserStore) delete(ctx context.Context, tx *sql.Tx, id int64) error {
 	query := `DELETE FROM users WHERE id = $1`
-	result, err := us.db.ExecContext(ctx, query, id)
+
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(5*time.Second))
+	defer cancel()
+
+	_, err := tx.ExecContext(ctx, query, id)
 	if err != nil {
 		return err
 	}
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if rowsAffected == 0 {
-		return ErrNotFound
-	}
+
+	// result, err := us.db.ExecContext(ctx, query, id)
+	// if err != nil {
+	// 	return err
+	// }
+	// rowsAffected, err := result.RowsAffected()
+	// if err != nil {
+	// 	return err
+	// }
+	// if rowsAffected == 0 {
+	// 	return ErrNotFound
+	// }
 
 	return nil
 }
