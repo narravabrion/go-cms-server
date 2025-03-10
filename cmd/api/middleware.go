@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/narravabrion/go-cms-server/internal/models"
 )
 
 func (api *api) BasicAuthMiddleware() func(http.Handler) http.Handler {
@@ -83,4 +84,34 @@ func (api *api) AuthTokenMiddleware(next http.Handler) http.Handler {
 		ctx = context.WithValue(ctx, userCtx, user)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+func (api *api) checkPostOwnership(role string, next http.HandlerFunc) http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		user:= getUserFromCtx(r)
+		post :=  getPostFromCtx(r)
+
+		if post.UserID == user.ID {
+			next.ServeHTTP(w,r)
+			return
+		}
+		allowed, err := api.checkRolePrecedence(r.Context(), user, role)
+		if err != nil {
+			writeJSONError(w, http.StatusInternalServerError, err.Error())
+			return 
+		}
+		if !allowed {
+			writeJSONError(w, http.StatusForbidden, "the user does not have access")
+			return
+		}
+		next.ServeHTTP(w,r)
+	})
+}
+
+func (api *api) checkRolePrecedence(ctx context.Context, user *models.User, roleName string ) (bool, error) {
+	role, err := api.store.Roles.GetByName(ctx, roleName)
+	if err != nil {
+		return false, err
+	}
+	return user.Role.Level >= role.Level, nil
 }

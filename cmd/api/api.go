@@ -86,8 +86,8 @@ func (api *api) muxHandler() http.Handler {
 			r.Route("/{postID}", func(r chi.Router) {
 				r.Use(api.postContextMiddleware)
 				r.Get("/", api.getPostHandler)
-				r.Delete("/", api.deletePostHandler)
-				r.Patch("/", api.updatePostHandler)
+				r.Delete("/", api.checkPostOwnership("admin",api.deletePostHandler))
+				r.Patch("/", api.checkPostOwnership("moderator",api.updatePostHandler))
 			})
 		})
 		r.Route("/users", func(r chi.Router) {
@@ -97,7 +97,7 @@ func (api *api) muxHandler() http.Handler {
 				// r.Use(api.userContextMiddleware)
 				r.Get("/", api.getUserHandler)
 				r.Delete("/", api.deleteUserHandler)
-				r.Patch("/", api.updateUserHandler)
+				r.Patch("/",api.updateUserHandler)
 				r.Put("/follow", api.followUserHandler)
 				r.Put("/unfollow", api.unfollowUserHandler)
 			})

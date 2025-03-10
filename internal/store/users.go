@@ -15,15 +15,21 @@ type UserStore struct {
 	db *sql.DB
 }
 
-
 func (us *UserStore) Create(ctx context.Context, tx *sql.Tx, user *models.User) error {
-	query := `INSERT INTO users (username, email, password) VALUES ($1, $2, $3) RETURNING id, created_at `
+	query := `INSERT INTO users (username, email, password, role_id) VALUES ($1, $2, $3, (SELECT id FROM roles WHERE name=$4)) RETURNING id, created_at `
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(5*time.Second))
+	defer cancel()
+	role :=  user.Role.Name
+	if role ==  "" {
+		role = "user"
+	}
 	err := tx.QueryRowContext(
 		ctx,
 		query,
 		user.Username,
 		user.Email,
 		user.Password.Hash,
+		role,
 	).Scan(
 		&user.ID,
 		&user.CreatedAt,
@@ -44,13 +50,21 @@ func (us *UserStore) Create(ctx context.Context, tx *sql.Tx, user *models.User) 
 
 func (us *UserStore) GetByID(ctx context.Context, id int64) (*models.User, error) {
 
-	query := `SELECT id, username, email FROM users WHERE id=$1`
+	query := `SELECT users.id, username, email, roles.* 
+			FROM users 
+			JOIN roles ON (users.role_id = roles.id)
+			WHERE users.id=$1
+			`
 
 	var user models.User
 	err := us.db.QueryRowContext(ctx, query, id).Scan(
 		&user.ID,
 		&user.Email,
 		&user.Username,
+		&user.Role.ID,
+		&user.Role.Name,
+		&user.Role.Level,
+		&user.Role.Description,
 	)
 	if err != nil {
 		switch {
@@ -232,4 +246,3 @@ func (us *UserStore) deleteUserInvitation(ctx context.Context, tx *sql.Tx, userI
 	}
 	return nil
 }
-

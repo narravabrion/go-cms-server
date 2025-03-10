@@ -45,6 +45,9 @@ func (api *api) registerUserHandler(w http.ResponseWriter, r *http.Request) {
 	user := &models.User{
 		Username: payload.Username,
 		Email:    payload.Email,
+		Role: models.Role{
+			Name: "user",
+		},
 	}
 
 	if err := user.Password.Set(payload.Password); err != nil {
