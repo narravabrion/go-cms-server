@@ -135,3 +135,17 @@ func (api *api) getUser(ctx context.Context, userID int64) (*models.User, error)
 	}
 	return user, nil
 }
+
+func (api *api) RateLimiterMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if api.config.rateLimiter.Enabled {
+			if allow, retryAfter := api.rateLimiter.Allow(r.RemoteAddr); !allow {
+				writeJSONError(w, http.StatusTooManyRequests, retryAfter.String())
+				api.rateLimitExceededResponse(w, r, retryAfter.String())
+				return
+			}
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}

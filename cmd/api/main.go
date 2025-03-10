@@ -9,6 +9,7 @@ import (
 	"github.com/narravabrion/go-cms-server/internal/db"
 	"github.com/narravabrion/go-cms-server/internal/env"
 	"github.com/narravabrion/go-cms-server/internal/mailer"
+	"github.com/narravabrion/go-cms-server/internal/ratelimiter"
 	"github.com/narravabrion/go-cms-server/internal/store"
 	"github.com/narravabrion/go-cms-server/internal/store/cache"
 	"go.uber.org/zap"
@@ -75,6 +76,11 @@ func main() {
 				iss: "go-cms",
 			},
 		},
+		rateLimiter: ratelimiter.Config{
+			RequestPerTimeFrame: env.GetIntEnv("RATELIMITER_REQUESTS_COUNT", 20),
+			TimeFrame: time.Second*5,
+			Enabled: true,
+		},
 	}
 
 	db, err := db.New(
@@ -95,6 +101,11 @@ func main() {
 		logger.Info("redis connection established")
 	}
 
+	rateLimiter := ratelimiter.NewFixedWindowLimiter(
+		config.rateLimiter.RequestPerTimeFrame,
+		config.rateLimiter.TimeFrame,
+	)
+
 	store := store.NewStrorage(db)
 	cacheStorage := cache.NewRedisStorage(redisDB)
 
@@ -108,6 +119,7 @@ func main() {
 		mailer: mailer,
 		authenticator: jwtAuthenticator,
 		cacheStorage: cacheStorage,
+		rateLimiter: rateLimiter,
 	}
 
 	logger.Fatal(api.run(api.muxHandler()))

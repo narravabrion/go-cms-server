@@ -15,6 +15,7 @@ import (
 	"github.com/narravabrion/go-cms-server/docs"
 	"github.com/narravabrion/go-cms-server/internal/auth"
 	"github.com/narravabrion/go-cms-server/internal/mailer"
+	"github.com/narravabrion/go-cms-server/internal/ratelimiter"
 	"github.com/narravabrion/go-cms-server/internal/store"
 	"github.com/narravabrion/go-cms-server/internal/store/cache"
 	httpSwagger "github.com/swaggo/http-swagger/v2"
@@ -28,6 +29,7 @@ type api struct {
 	mailer        mailer.Client
 	authenticator auth.Authenticator
 	cacheStorage  cache.Storage
+	rateLimiter   ratelimiter.Limiter
 }
 
 type config struct {
@@ -39,6 +41,7 @@ type config struct {
 	frontEndURL string
 	auth        authConfig
 	redisConfig redisConfig
+	rateLimiter ratelimiter.Config
 }
 
 type redisConfig struct {
@@ -88,6 +91,11 @@ func (api *api) muxHandler() http.Handler {
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+
+
+	if api.config.rateLimiter.Enabled {
+		r.Use(api.RateLimiterMiddleware)
+	}
 
 	r.Use(middleware.Timeout(60 * time.Second))
 
