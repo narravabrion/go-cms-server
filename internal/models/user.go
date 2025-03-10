@@ -27,3 +27,8 @@ func (p *Password) Set(pass string) error {
 	return nil
 
 }
+
+
+func (p *Password) ComparePassword(password string) error {
+	return bcrypt.CompareHashAndPassword([]byte(p.Hash), []byte(password))
+}

@@ -10,11 +10,11 @@ import (
 )
 
 var (
-	ErrNotFound         = errors.New("resource not found!")
-	ErrAlreadyFollowing = errors.New("you are already following this user")
-	ErrNotFollowing     = errors.New("you are not following this user")
-	ErrDuplicateEmail  = errors.New("email already exists")
-	ErrDuplicateUsername  = errors.New("username already exists")
+	ErrNotFound          = errors.New("resource not found")
+	ErrAlreadyFollowing  = errors.New("you are already following this user")
+	ErrNotFollowing      = errors.New("you are not following this user")
+	ErrDuplicateEmail    = errors.New("email already exists")
+	ErrDuplicateUsername = errors.New("username already exists")
 )
 
 type Storage struct {
@@ -28,10 +28,12 @@ type Storage struct {
 	Users interface {
 		Create(context.Context, *sql.Tx, *models.User) error
 		GetByID(context.Context, int64) (*models.User, error)
+		GetByEmail(context.Context, string) (*models.User, error)
 		Delete(context.Context, int64) error
 		Update(context.Context, *models.User) error
 		CreateAndInvite(context.Context, *models.User, string, time.Duration) error
 		Activate(context.Context, string) error
+		
 	}
 	Followers interface {
 		Follow(context.Context, int64, int64) error

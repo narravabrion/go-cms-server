@@ -11,9 +11,13 @@ import (
 	"github.com/narravabrion/go-cms-server/internal/store"
 )
 
-type FollowerUser struct {
-	UserID int64 `json:"user_id"`
-}
+// type FollowerUser struct {
+// 	UserID int64 `json:"user_id"`
+// }
+
+type ctxKey string
+
+const userCtx ctxKey = "user"
 
 // ShowAccount godoc
 //
@@ -59,16 +63,14 @@ func (api *api) updateUserHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (api *api) followUserHandler(w http.ResponseWriter, r *http.Request) {
-	followedUser := getUserFromCtx(r)
-
-	// revert to context auth user
-	var payload FollowerUser
-	if err := readJSON(w, r, &payload); err != nil {
+	followerUser := getUserFromCtx(r)
+	followedUserID, err := strconv.ParseInt(chi.URLParam(r, "userID"), 10, 64)
+	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 	}
 
 	ctx := r.Context()
-	if err := api.store.Followers.Follow(ctx, followedUser.ID, payload.UserID); err != nil {
+	if err := api.store.Followers.Follow(ctx, followerUser.ID, followedUserID); err != nil {
 		switch err {
 		case store.ErrAlreadyFollowing:
 			writeJSONError(w, http.StatusConflict, store.ErrAlreadyFollowing.Error())
@@ -86,17 +88,14 @@ func (api *api) followUserHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (api *api) unfollowUserHandler(w http.ResponseWriter, r *http.Request) {
-
-	unFollowedUser := getUserFromCtx(r)
-
-	// revert to context auth user
-	var payload FollowerUser
-	if err := readJSON(w, r, &payload); err != nil {
+	unFollowerUser := getUserFromCtx(r)
+	unfollowedUserID, err := strconv.ParseInt(chi.URLParam(r, "userID"), 10, 64)
+	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 	}
 
 	ctx := r.Context()
-	if err := api.store.Followers.UnFollow(ctx, unFollowedUser.ID, payload.UserID); err != nil {
+	if err := api.store.Followers.UnFollow(ctx, unFollowerUser.ID, unfollowedUserID); err != nil {
 		switch err {
 		case store.ErrNotFollowing:
 			writeJSONError(w, http.StatusConflict, store.ErrNotFollowing.Error())

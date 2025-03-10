@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
+	"github.com/narravabrion/go-cms-server/internal/auth"
 	"github.com/narravabrion/go-cms-server/internal/db"
 	"github.com/narravabrion/go-cms-server/internal/env"
 	"github.com/narravabrion/go-cms-server/internal/mailer"
@@ -55,6 +56,17 @@ func main() {
 				apiKey:    env.GetStringEnv("SENDGRID_API_KEY", ""),
 			},
 		},
+		auth: authConfig{
+			basic: basicConfig{
+				user: env.GetStringEnv("AUTH_BASIC_USER", "admin"),
+				password: env.GetStringEnv("AUTH_BASIC_PASSWORD", "admin"),
+			},
+			token: tokenConfig{
+				secret: env.GetStringEnv("AUTH_TOKEN_SECRET", "somesecret"),
+				exp: time.Hour *24 * 3,
+				iss: "go-cms",
+			},
+		},
 	}
 
 	db, err := db.New(
@@ -63,19 +75,22 @@ func main() {
 		config.db.maxIdleConns,
 		config.db.maxIdleTIme,
 	)
-	defer db.Close()
 	if err != nil {
 		logger.Fatal(err)
 	}
+	defer db.Close()
 	logger.Info("connected to Db!")
 	store := store.NewStrorage(db)
 
 	mailer := mailer.NewSendGRid(config.mail.sendGrid.apiKey, config.mail.fromEmail)
+
+	jwtAuthenticator := auth.NewJWTAuthenticator(config.auth.token.secret, config.auth.token.iss, config.auth.token.iss)
 	api := &api{
 		config: config,
 		store:  store,
 		logger: logger,
 		mailer: mailer,
+		authenticator: jwtAuthenticator,
 	}
 
 	logger.Fatal(api.run(api.muxHandler()))
