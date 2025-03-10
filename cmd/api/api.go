@@ -1,8 +1,13 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -11,47 +16,57 @@ import (
 	"github.com/narravabrion/go-cms-server/internal/auth"
 	"github.com/narravabrion/go-cms-server/internal/mailer"
 	"github.com/narravabrion/go-cms-server/internal/store"
+	"github.com/narravabrion/go-cms-server/internal/store/cache"
 	httpSwagger "github.com/swaggo/http-swagger/v2"
 	"go.uber.org/zap"
 )
 
 type api struct {
-	config config
-	store  store.Storage
-	logger *zap.SugaredLogger
-	mailer mailer.Client
-	authenticator auth.Authenticator 
+	config        config
+	store         store.Storage
+	logger        *zap.SugaredLogger
+	mailer        mailer.Client
+	authenticator auth.Authenticator
+	cacheStorage  cache.Storage
 }
 
 type config struct {
-	addr   string
-	db     dbConfig
-	env    string
-	apiURL string
-	mail   mailConfig
+	addr        string
+	db          dbConfig
+	env         string
+	apiURL      string
+	mail        mailConfig
 	frontEndURL string
-	auth authConfig
+	auth        authConfig
+	redisConfig redisConfig
+}
+
+type redisConfig struct {
+	addr     string
+	password string
+	db       int
+	enabled  bool
 }
 
 type authConfig struct {
-	basic basicConfig 
+	basic basicConfig
 	token tokenConfig
 }
 
 type tokenConfig struct {
 	secret string
-	exp time.Duration
-	iss string
+	exp    time.Duration
+	iss    string
 }
 
 type basicConfig struct {
-	user string
-	password string 
+	user     string
+	password string
 }
 
 type mailConfig struct {
-	sendGrid sendGridConfig
-	exp time.Duration
+	sendGrid  sendGridConfig
+	exp       time.Duration
 	fromEmail string
 }
 
@@ -63,7 +78,7 @@ type dbConfig struct {
 }
 
 type sendGridConfig struct {
-	apiKey    string
+	apiKey string
 }
 
 func (api *api) muxHandler() http.Handler {
@@ -86,8 +101,8 @@ func (api *api) muxHandler() http.Handler {
 			r.Route("/{postID}", func(r chi.Router) {
 				r.Use(api.postContextMiddleware)
 				r.Get("/", api.getPostHandler)
-				r.Delete("/", api.checkPostOwnership("admin",api.deletePostHandler))
-				r.Patch("/", api.checkPostOwnership("moderator",api.updatePostHandler))
+				r.Delete("/", api.checkPostOwnership("admin", api.deletePostHandler))
+				r.Patch("/", api.checkPostOwnership("moderator", api.updatePostHandler))
 			})
 		})
 		r.Route("/users", func(r chi.Router) {
@@ -97,7 +112,7 @@ func (api *api) muxHandler() http.Handler {
 				// r.Use(api.userContextMiddleware)
 				r.Get("/", api.getUserHandler)
 				r.Delete("/", api.deleteUserHandler)
-				r.Patch("/",api.updateUserHandler)
+				r.Patch("/", api.updateUserHandler)
 				r.Put("/follow", api.followUserHandler)
 				r.Put("/unfollow", api.unfollowUserHandler)
 			})
@@ -129,6 +144,28 @@ func (api *api) run(mux http.Handler) error {
 		ReadTimeout:  15 * time.Second,
 		IdleTimeout:  3 * time.Minute,
 	}
+
+	shutdown := make(chan error)
+	go func() {
+		quit := make(chan os.Signal, 1)
+
+		signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+		s := <-quit
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		api.logger.Infow("signal caught", "signal", s.String())
+		shutdown <- server.Shutdown(ctx)
+	}()
 	api.logger.Infow("server started", "addr", api.config.addr, "env", api.config.env)
-	return server.ListenAndServe()
+	err := server.ListenAndServe()
+
+	if !errors.Is(err, http.ErrServerClosed) {
+		return err
+	}
+	err = <-shutdown
+	if err != nil {
+		return err
+	}
+	api.logger.Infow("server stopped", "addr", api.config.addr, "env", api.config.env)
+	return nil
 }

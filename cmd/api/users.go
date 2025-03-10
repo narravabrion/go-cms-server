@@ -34,7 +34,27 @@ const userCtx ctxKey = "user"
 //	@Security		ApiKeyAuth
 //	@Router			/users/{id} [get]
 func (api *api) getUserHandler(w http.ResponseWriter, r *http.Request) {
-	user := getUserFromCtx(r)
+	// user := getUserFromCtx(r)
+
+	idParam := chi.URLParam(r, "userID")
+	id, err := strconv.ParseInt(idParam, 10, 64)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	ctx := r.Context()
+	user, err := api.getUser(ctx, id)
+	if err != nil {
+		switch {
+		case errors.Is(err, store.ErrNotFound):
+			writeJSONError(w, http.StatusNotFound, err.Error())
+			return
+		default:
+			writeJSONError(w, http.StatusInternalServerError, err.Error())
+			return
+
+		}
+	}
 	if err := api.jsonResponse(w, http.StatusOK, user); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -45,6 +65,7 @@ func (api *api) deleteUserHandler(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(idParam, 10, 64)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
 	ctx := r.Context()
 	err = api.store.Users.Delete(ctx, id)
@@ -135,6 +156,7 @@ func (api *api) userContextMiddleware(next http.Handler) http.Handler {
 		id, err := strconv.ParseInt(idParam, 10, 64)
 		if err != nil {
 			writeJSONError(w, http.StatusInternalServerError, err.Error())
+			return
 		}
 		ctx := r.Context()
 		user, err := api.store.Users.GetByID(ctx, id)
@@ -142,11 +164,12 @@ func (api *api) userContextMiddleware(next http.Handler) http.Handler {
 			switch {
 			case errors.Is(err, store.ErrNotFound):
 				writeJSONError(w, http.StatusNotFound, err.Error())
+				return
 			default:
 				writeJSONError(w, http.StatusInternalServerError, err.Error())
+				return
 
 			}
-			return
 		}
 		ctx = context.WithValue(ctx, "user", user)
 		next.ServeHTTP(w, r.WithContext(ctx))

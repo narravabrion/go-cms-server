@@ -3,12 +3,14 @@ package main
 import (
 	"time"
 
+	"github.com/go-redis/redis/v8"
 	"github.com/joho/godotenv"
 	"github.com/narravabrion/go-cms-server/internal/auth"
 	"github.com/narravabrion/go-cms-server/internal/db"
 	"github.com/narravabrion/go-cms-server/internal/env"
 	"github.com/narravabrion/go-cms-server/internal/mailer"
 	"github.com/narravabrion/go-cms-server/internal/store"
+	"github.com/narravabrion/go-cms-server/internal/store/cache"
 	"go.uber.org/zap"
 )
 
@@ -48,6 +50,12 @@ func main() {
 			maxIdleConns: env.GetIntEnv("DB_MAX_IDLE_CONNS", 10),
 			maxIdleTIme:  env.GetTimeEnv("DB_MAX_IDLE_TIME", 15*time.Minute),
 		},
+		redisConfig: redisConfig{
+			addr: env.GetStringEnv("REDIS_ADDR","127.0.0.1:6379"),
+			password: env.GetStringEnv("REDIS_PASSWORD",""),
+			db: env.GetIntEnv("REDIS_DB",0),
+			enabled: false,
+		},
 		env: env.GetStringEnv("ENV", "development"),
 		mail: mailConfig{
 			exp: 3 * 3 * time.Hour,
@@ -80,7 +88,15 @@ func main() {
 	}
 	defer db.Close()
 	logger.Info("connected to Db!")
+
+	var redisDB *redis.Client
+	if config.redisConfig.enabled {
+		redisDB = cache.NewRedisClient(config.redisConfig.addr, config.redisConfig.password, config.redisConfig.db)
+		logger.Info("redis connection established")
+	}
+
 	store := store.NewStrorage(db)
+	cacheStorage := cache.NewRedisStorage(redisDB)
 
 	mailer := mailer.NewSendGRid(config.mail.sendGrid.apiKey, config.mail.fromEmail)
 
@@ -91,6 +107,7 @@ func main() {
 		logger: logger,
 		mailer: mailer,
 		authenticator: jwtAuthenticator,
+		cacheStorage: cacheStorage,
 	}
 
 	logger.Fatal(api.run(api.muxHandler()))

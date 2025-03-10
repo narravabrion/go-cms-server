@@ -75,10 +75,10 @@ func (api *api) AuthTokenMiddleware(next http.Handler) http.Handler {
 			return
 		}
 		ctx := r.Context()
-		user, err := api.store.Users.GetByID(ctx, userID)
+
+		user, err := api.getUser(ctx, userID)
 		if err != nil {
 			writeJSONError(w, http.StatusUnauthorized, err.Error())
-			return
 		}
 
 		ctx = context.WithValue(ctx, userCtx, user)
@@ -88,30 +88,50 @@ func (api *api) AuthTokenMiddleware(next http.Handler) http.Handler {
 
 func (api *api) checkPostOwnership(role string, next http.HandlerFunc) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		user:= getUserFromCtx(r)
-		post :=  getPostFromCtx(r)
+		user := getUserFromCtx(r)
+		post := getPostFromCtx(r)
 
 		if post.UserID == user.ID {
-			next.ServeHTTP(w,r)
+			next.ServeHTTP(w, r)
 			return
 		}
 		allowed, err := api.checkRolePrecedence(r.Context(), user, role)
 		if err != nil {
 			writeJSONError(w, http.StatusInternalServerError, err.Error())
-			return 
+			return
 		}
 		if !allowed {
 			writeJSONError(w, http.StatusForbidden, "the user does not have access")
 			return
 		}
-		next.ServeHTTP(w,r)
+		next.ServeHTTP(w, r)
 	})
 }
 
-func (api *api) checkRolePrecedence(ctx context.Context, user *models.User, roleName string ) (bool, error) {
+func (api *api) checkRolePrecedence(ctx context.Context, user *models.User, roleName string) (bool, error) {
 	role, err := api.store.Roles.GetByName(ctx, roleName)
 	if err != nil {
 		return false, err
 	}
 	return user.Role.Level >= role.Level, nil
+}
+
+func (api *api) getUser(ctx context.Context, userID int64) (*models.User, error) {
+	if !api.config.redisConfig.enabled {
+		return api.store.Users.GetByID(ctx, userID)
+	}
+	user, err := api.cacheStorage.Users.Get(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if user == nil {
+		user, err := api.store.Users.GetByID(ctx, userID)
+		if err != nil {
+			return nil, err
+		}
+		if err := api.cacheStorage.Users.Set(ctx, user); err != nil {
+			return nil, err
+		}
+	}
+	return user, nil
 }
