@@ -3,9 +3,11 @@ package main
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"net/http"
 
 	"github.com/google/uuid"
+	"github.com/narravabrion/go-cms-server/internal/mailer"
 	"github.com/narravabrion/go-cms-server/internal/models"
 	"github.com/narravabrion/go-cms-server/internal/store"
 )
@@ -65,8 +67,31 @@ func (api *api) registerUserHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userWithToken := UserWithToken{
-		User: user,
+		User:  user,
 		Token: token,
+	}
+	activationURL := fmt.Sprintf("%sconfirm/%s", api.config.frontEndURL, token)
+
+	isProdEnv := api.config.env == "production"
+
+	vars := struct {
+		Username      string
+		ActivationURL string
+	}{
+		Username:      user.Username,
+		ActivationURL: activationURL,
+	}
+
+	err = api.mailer.Send(mailer.UserWelcomeTemplate, user.Username, user.Email, vars, !isProdEnv)
+
+	if err != nil {
+		api.logger.Errorw("error sending email", "error", err)
+		// rollback
+		if err := api.store.Users.Delete(ctx, user.ID); err != nil {
+			api.logger.Errorw("error deleting user","error", err)
+		}
+		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
 
 	if err := writeJson(w, http.StatusCreated, userWithToken); err != nil {

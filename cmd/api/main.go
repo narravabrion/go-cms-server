@@ -6,6 +6,7 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/narravabrion/go-cms-server/internal/db"
 	"github.com/narravabrion/go-cms-server/internal/env"
+	"github.com/narravabrion/go-cms-server/internal/mailer"
 	"github.com/narravabrion/go-cms-server/internal/store"
 	"go.uber.org/zap"
 )
@@ -28,7 +29,6 @@ import (
 //	@name						Authorization
 //	@description
 
-
 func main() {
 
 	logger := zap.Must(zap.NewProduction()).Sugar()
@@ -38,8 +38,9 @@ func main() {
 		logger.Fatal(err)
 	}
 	config := config{
-		addr: env.GetStringEnv("ADDR", ":8081"),
+		addr:   env.GetStringEnv("ADDR", ":8081"),
 		apiURL: env.GetStringEnv("EXTERNAL_URL", "localhost:8081"),
+		frontEndURL: env.GetStringEnv("FRONTEND_URL", "http://127.0.0.1:3000"),
 		db: dbConfig{
 			connString:   env.GetStringEnv("CONN_STRING", "postgres://postgres:password@localhost/go_cms?sslmode=disable"),
 			maxOpenConns: env.GetIntEnv("DB_MAX_OPEN_CONNS", 20),
@@ -47,8 +48,12 @@ func main() {
 			maxIdleTIme:  env.GetTimeEnv("DB_MAX_IDLE_TIME", 15*time.Minute),
 		},
 		env: env.GetStringEnv("ENV", "development"),
-		mail : mailConfig{
-			exp: 3 * 3 *time.Hour,
+		mail: mailConfig{
+			exp: 3 * 3 * time.Hour,
+			fromEmail: env.GetStringEnv("SENDGRID_FROM_EMAIL", ""),
+			sendGrid: sendGridConfig{
+				apiKey:    env.GetStringEnv("SENDGRID_API_KEY", ""),
+			},
 		},
 	}
 
@@ -64,10 +69,13 @@ func main() {
 	}
 	logger.Info("connected to Db!")
 	store := store.NewStrorage(db)
+
+	mailer := mailer.NewSendGRid(config.mail.sendGrid.apiKey, config.mail.fromEmail)
 	api := &api{
 		config: config,
 		store:  store,
 		logger: logger,
+		mailer: mailer,
 	}
 
 	logger.Fatal(api.run(api.muxHandler()))

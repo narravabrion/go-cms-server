@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/narravabrion/go-cms-server/docs"
+	"github.com/narravabrion/go-cms-server/internal/mailer"
 	"github.com/narravabrion/go-cms-server/internal/store"
 	httpSwagger "github.com/swaggo/http-swagger/v2"
 	"go.uber.org/zap"
@@ -17,6 +18,7 @@ type api struct {
 	config config
 	store  store.Storage
 	logger *zap.SugaredLogger
+	mailer mailer.Client
 }
 
 type config struct {
@@ -25,10 +27,13 @@ type config struct {
 	env    string
 	apiURL string
 	mail   mailConfig
+	frontEndURL string
 }
 
 type mailConfig struct {
+	sendGrid sendGridConfig
 	exp time.Duration
+	fromEmail string
 }
 
 type dbConfig struct {
@@ -36,6 +41,10 @@ type dbConfig struct {
 	maxOpenConns int
 	maxIdleConns int
 	maxIdleTIme  time.Duration
+}
+
+type sendGridConfig struct {
+	apiKey    string
 }
 
 func (api *api) muxHandler() http.Handler {
@@ -62,7 +71,7 @@ func (api *api) muxHandler() http.Handler {
 			})
 		})
 		r.Route("/users", func(r chi.Router) {
-			r.Put("/activate/{token}",api.activateUserHandler)
+			r.Put("/activate/{token}", api.activateUserHandler)
 			r.Route("/{userID}", func(r chi.Router) {
 				r.Use(api.userContextMiddleware)
 				r.Get("/", api.getUserHandler)

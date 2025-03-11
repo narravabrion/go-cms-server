@@ -1,0 +1,21 @@
+{{define "subject"}} Finish Registration at go-cms{{end}}
+{{define "body"}}
+    <!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    <p>Hi {{.Username}}</p>
+    <p>Thanks for signing up for go-cms</p>
+    <p>To complete your registration and start using the system kidy confirm your email by clicking on the link below:</p>
+    <p><a href="{{.ActivationURL}}">{{.ActivationURL}}</a></p>
+    <p>To manually activate your account copy and past the URL above to your browser</p>
+    <p>if you did not sign up for the go-cms yu can safely ignore this link</p> 
+    <p>Regards,</p>
+    <p>go-cms team </p>
+</body>
+</html>
+{{end}}
