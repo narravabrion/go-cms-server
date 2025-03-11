@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"errors"
 	"net/http"
 	"strconv"
@@ -150,32 +149,32 @@ func (api *api) activateUserHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (api *api) userContextMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		idParam := chi.URLParam(r, "userID")
-		id, err := strconv.ParseInt(idParam, 10, 64)
-		if err != nil {
-			writeJSONError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-		ctx := r.Context()
-		user, err := api.store.Users.GetByID(ctx, id)
-		if err != nil {
-			switch {
-			case errors.Is(err, store.ErrNotFound):
-				writeJSONError(w, http.StatusNotFound, err.Error())
-				return
-			default:
-				writeJSONError(w, http.StatusInternalServerError, err.Error())
-				return
+// func (api *api) userContextMiddleware(next http.Handler) http.Handler {
+// 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// 		idParam := chi.URLParam(r, "userID")
+// 		id, err := strconv.ParseInt(idParam, 10, 64)
+// 		if err != nil {
+// 			writeJSONError(w, http.StatusInternalServerError, err.Error())
+// 			return
+// 		}
+// 		ctx := r.Context()
+// 		user, err := api.store.Users.GetByID(ctx, id)
+// 		if err != nil {
+// 			switch {
+// 			case errors.Is(err, store.ErrNotFound):
+// 				writeJSONError(w, http.StatusNotFound, err.Error())
+// 				return
+// 			default:
+// 				writeJSONError(w, http.StatusInternalServerError, err.Error())
+// 				return
 
-			}
-		}
-		ctx = context.WithValue(ctx, "user", user)
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
+// 			}
+// 		}
+// 		ctx = context.WithValue(ctx, "user", user)
+// 		next.ServeHTTP(w, r.WithContext(ctx))
+// 	})
 
-}
+// }
 
 func getUserFromCtx(r *http.Request) *models.User {
 	user, _ := r.Context().Value("user").(*models.User)
