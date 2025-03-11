@@ -9,6 +9,8 @@ type User struct {
 	Password  Password `json:"-"`
 	CreatedAt string   `json:"created_at"`
 	IsActive  bool     `json:"is_active"`
+	RoleID    int64    `json:"role_id"`
+	Role Role	`json:"role"`
 }
 
 type Password struct {
@@ -26,4 +28,8 @@ func (p *Password) Set(pass string) error {
 
 	return nil
 
+}
+
+func (p *Password) ComparePassword(password string) error {
+	return bcrypt.CompareHashAndPassword([]byte(p.Hash), []byte(password))
 }

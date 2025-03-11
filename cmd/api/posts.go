@@ -35,10 +35,12 @@ func (api *api) createPostHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	user := getUserFromCtx(r)
+
 	post := &models.Post{
 		Title:   payload.Title,
 		Content: payload.Content,
-		UserID:  1,
+		UserID:  user.ID,
 		Tags:    payload.Tags,
 	}
 
