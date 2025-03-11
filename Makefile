@@ -21,3 +21,8 @@ clean-migrations:
 .PHONY: migration-status
 migration-status:
 	@migrate -path=$(MIGRATIONS_PATH) -database=$(CONN_STRING) version
+
+
+.PHONY: gen-docs
+gen-docs:
+	@swag init -g ./api/main.go -d cmd,internal && swag fmt

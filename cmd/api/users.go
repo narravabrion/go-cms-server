@@ -15,6 +15,20 @@ type FollowerUser struct {
 	UserID int64 `json:"user_id"`
 }
 
+// ShowAccount godoc
+//
+//	@Summary		Fetches user profile
+//	@Description	gets the user by userID
+//	@Tags			users
+//	@Accept			json
+//	@Produce		json
+//	@Param			id	path		int	true	"User ID"
+//	@Success		200	{object}	models.User
+//	@Failure		400	{object}	error
+//	@Failure		404	{object}	error
+//	@Failure		500	{object}	error
+//	@Security		ApiKeyAuth
+//	@Router			/users/{id} [get]
 func (api *api) getUserHandler(w http.ResponseWriter, r *http.Request) {
 	user := getUserFromCtx(r)
 	if err := api.jsonResponse(w, http.StatusOK, user); err != nil {
@@ -95,6 +109,24 @@ func (api *api) unfollowUserHandler(w http.ResponseWriter, r *http.Request) {
 	if err := api.jsonResponse(w, http.StatusNoContent, nil); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, err.Error())
 		return
+	}
+}
+
+func (api *api) activateUserHandler(w http.ResponseWriter, r *http.Request) {
+	token := chi.URLParam(r, "token")
+	ctx := r.Context()
+	if err := api.store.Users.Activate(ctx, token); err != nil {
+		switch err {
+		case store.ErrNotFound:
+			writeJSONError(w, http.StatusBadRequest, err.Error())
+			return
+		default:
+			writeJSONError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+	if err := writeJson(w, http.StatusNoContent, ""); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, err.Error())
 	}
 }
 

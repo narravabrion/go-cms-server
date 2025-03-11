@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"log"
 	"time"
 
 	"github.com/lib/pq"
@@ -106,7 +105,6 @@ func (ps *PostStore) Update(ctx context.Context, post *models.Post) error {
 }
 
 func (ps *PostStore) GetUserFeed(ctx context.Context, userID int64, fq PaginationFeedQuery) ([]models.Post, error) {
-	log.Print("get user feed")
 	query := `
 	
 		SELECT 
@@ -123,8 +121,6 @@ func (ps *PostStore) GetUserFeed(ctx context.Context, userID int64, fq Paginatio
 		`
 
 	rows, err := ps.db.QueryContext(ctx, query, userID, pq.Array(fq.Tags), fq.Limit, fq.Offset)
-	log.Printf("rows: %+v", rows)
-	log.Printf("err: %d", userID)
 	if err != nil {
 		return nil, err
 	}
