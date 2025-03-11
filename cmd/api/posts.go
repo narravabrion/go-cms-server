@@ -22,6 +22,10 @@ type UpdatePostPayload struct {
 	Content *string `json:"content" validate:"omitempty,max=2000"`
 }
 
+type postKey string
+
+const postCtx postKey = "post"
+
 func (api *api) createPostHandler(w http.ResponseWriter, r *http.Request) {
 
 	var payload CreatePostPayload
@@ -137,12 +141,12 @@ func (api *api) postContextMiddleware(next http.Handler) http.Handler {
 			}
 			return
 		}
-		ctx = context.WithValue(ctx, "post", post)
+		ctx = context.WithValue(ctx, postCtx, post)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
 func getPostFromCtx(r *http.Request) *models.Post {
-	post, _ := r.Context().Value("post").(*models.Post)
+	post, _ := r.Context().Value(postCtx).(*models.Post)
 	return post
 }
