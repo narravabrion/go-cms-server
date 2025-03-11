@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"expvar"
 	"fmt"
 	"net/http"
 	"os"
@@ -12,8 +13,10 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/cors"
 	"github.com/narravabrion/go-cms-server/docs"
 	"github.com/narravabrion/go-cms-server/internal/auth"
+	"github.com/narravabrion/go-cms-server/internal/env"
 	"github.com/narravabrion/go-cms-server/internal/mailer"
 	"github.com/narravabrion/go-cms-server/internal/ratelimiter"
 	"github.com/narravabrion/go-cms-server/internal/store"
@@ -92,6 +95,15 @@ func (api *api) muxHandler() http.Handler {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 
+	r.Use(cors.Handler(cors.Options{
+		AllowedOrigins:   []string{env.GetStringEnv("CORS_ALLOWED_ORIGIN", "http://localhost:3001")},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
+		ExposedHeaders:   []string{"Link"},
+		AllowCredentials: false,
+		MaxAge:           300, // Maximum value not ignored by any of major browsers
+	}))
+
 
 	if api.config.rateLimiter.Enabled {
 		r.Use(api.RateLimiterMiddleware)
@@ -101,6 +113,7 @@ func (api *api) muxHandler() http.Handler {
 
 	r.Route("/v1", func(r chi.Router) {
 		r.With(api.BasicAuthMiddleware()).Get("/health", api.healthCheckHandler)
+		r.Get("/metrics", expvar.Handler().ServeHTTP)
 		docsURL := fmt.Sprintf("%s/swagger/doc.json", api.config.addr)
 		r.Get("/swagger/*", httpSwagger.Handler(httpSwagger.URL(docsURL)))
 		r.Route("/posts", func(r chi.Router) {

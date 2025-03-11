@@ -1,6 +1,7 @@
 package main
 
 import (
+	"expvar"
 	"time"
 
 	"github.com/go-redis/redis/v8"
@@ -121,6 +122,11 @@ func main() {
 		cacheStorage: cacheStorage,
 		rateLimiter: rateLimiter,
 	}
+
+	expvar.NewString("version").Set("v1")
+	expvar.Publish("database", expvar.Func(func() any {
+		return db.Stats()
+	}))
 
 	logger.Fatal(api.run(api.muxHandler()))
 }
