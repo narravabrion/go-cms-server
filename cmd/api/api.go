@@ -1,57 +1,78 @@
 package main
 
 import (
+	"context"
+	"errors"
+	"expvar"
 	"fmt"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/cors"
 	"github.com/narravabrion/go-cms-server/docs"
 	"github.com/narravabrion/go-cms-server/internal/auth"
+	"github.com/narravabrion/go-cms-server/internal/env"
 	"github.com/narravabrion/go-cms-server/internal/mailer"
+	"github.com/narravabrion/go-cms-server/internal/ratelimiter"
 	"github.com/narravabrion/go-cms-server/internal/store"
+	"github.com/narravabrion/go-cms-server/internal/store/cache"
 	httpSwagger "github.com/swaggo/http-swagger/v2"
 	"go.uber.org/zap"
 )
 
 type api struct {
-	config config
-	store  store.Storage
-	logger *zap.SugaredLogger
-	mailer mailer.Client
-	authenticator auth.Authenticator 
+	config        config
+	store         store.Storage
+	logger        *zap.SugaredLogger
+	mailer        mailer.Client
+	authenticator auth.Authenticator
+	cacheStorage  cache.Storage
+	rateLimiter   ratelimiter.Limiter
 }
 
 type config struct {
-	addr   string
-	db     dbConfig
-	env    string
-	apiURL string
-	mail   mailConfig
+	addr        string
+	db          dbConfig
+	env         string
+	apiURL      string
+	mail        mailConfig
 	frontEndURL string
-	auth authConfig
+	auth        authConfig
+	redisConfig redisConfig
+	rateLimiter ratelimiter.Config
+}
+
+type redisConfig struct {
+	addr     string
+	password string
+	db       int
+	enabled  bool
 }
 
 type authConfig struct {
-	basic basicConfig 
+	basic basicConfig
 	token tokenConfig
 }
 
 type tokenConfig struct {
 	secret string
-	exp time.Duration
-	iss string
+	exp    time.Duration
+	iss    string
 }
 
 type basicConfig struct {
-	user string
-	password string 
+	user     string
+	password string
 }
 
 type mailConfig struct {
-	sendGrid sendGridConfig
-	exp time.Duration
+	sendGrid  sendGridConfig
+	exp       time.Duration
 	fromEmail string
 }
 
@@ -63,7 +84,7 @@ type dbConfig struct {
 }
 
 type sendGridConfig struct {
-	apiKey    string
+	apiKey string
 }
 
 func (api *api) muxHandler() http.Handler {
@@ -74,10 +95,25 @@ func (api *api) muxHandler() http.Handler {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 
+	r.Use(cors.Handler(cors.Options{
+		AllowedOrigins:   []string{env.GetStringEnv("CORS_ALLOWED_ORIGIN", "http://localhost:3001")},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
+		ExposedHeaders:   []string{"Link"},
+		AllowCredentials: false,
+		MaxAge:           300, // Maximum value not ignored by any of major browsers
+	}))
+
+
+	if api.config.rateLimiter.Enabled {
+		r.Use(api.RateLimiterMiddleware)
+	}
+
 	r.Use(middleware.Timeout(60 * time.Second))
 
 	r.Route("/v1", func(r chi.Router) {
 		r.With(api.BasicAuthMiddleware()).Get("/health", api.healthCheckHandler)
+		r.Get("/metrics", expvar.Handler().ServeHTTP)
 		docsURL := fmt.Sprintf("%s/swagger/doc.json", api.config.addr)
 		r.Get("/swagger/*", httpSwagger.Handler(httpSwagger.URL(docsURL)))
 		r.Route("/posts", func(r chi.Router) {
@@ -86,8 +122,8 @@ func (api *api) muxHandler() http.Handler {
 			r.Route("/{postID}", func(r chi.Router) {
 				r.Use(api.postContextMiddleware)
 				r.Get("/", api.getPostHandler)
-				r.Delete("/", api.checkPostOwnership("admin",api.deletePostHandler))
-				r.Patch("/", api.checkPostOwnership("moderator",api.updatePostHandler))
+				r.Delete("/", api.checkPostOwnership("admin", api.deletePostHandler))
+				r.Patch("/", api.checkPostOwnership("moderator", api.updatePostHandler))
 			})
 		})
 		r.Route("/users", func(r chi.Router) {
@@ -97,7 +133,7 @@ func (api *api) muxHandler() http.Handler {
 				// r.Use(api.userContextMiddleware)
 				r.Get("/", api.getUserHandler)
 				r.Delete("/", api.deleteUserHandler)
-				r.Patch("/",api.updateUserHandler)
+				r.Patch("/", api.updateUserHandler)
 				r.Put("/follow", api.followUserHandler)
 				r.Put("/unfollow", api.unfollowUserHandler)
 			})
@@ -129,6 +165,28 @@ func (api *api) run(mux http.Handler) error {
 		ReadTimeout:  15 * time.Second,
 		IdleTimeout:  3 * time.Minute,
 	}
+
+	shutdown := make(chan error)
+	go func() {
+		quit := make(chan os.Signal, 1)
+
+		signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+		s := <-quit
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		api.logger.Infow("signal caught", "signal", s.String())
+		shutdown <- server.Shutdown(ctx)
+	}()
 	api.logger.Infow("server started", "addr", api.config.addr, "env", api.config.env)
-	return server.ListenAndServe()
+	err := server.ListenAndServe()
+
+	if !errors.Is(err, http.ErrServerClosed) {
+		return err
+	}
+	err = <-shutdown
+	if err != nil {
+		return err
+	}
+	api.logger.Infow("server stopped", "addr", api.config.addr, "env", api.config.env)
+	return nil
 }

@@ -1,14 +1,18 @@
 package main
 
 import (
+	"expvar"
 	"time"
 
+	"github.com/go-redis/redis/v8"
 	"github.com/joho/godotenv"
 	"github.com/narravabrion/go-cms-server/internal/auth"
 	"github.com/narravabrion/go-cms-server/internal/db"
 	"github.com/narravabrion/go-cms-server/internal/env"
 	"github.com/narravabrion/go-cms-server/internal/mailer"
+	"github.com/narravabrion/go-cms-server/internal/ratelimiter"
 	"github.com/narravabrion/go-cms-server/internal/store"
+	"github.com/narravabrion/go-cms-server/internal/store/cache"
 	"go.uber.org/zap"
 )
 
@@ -48,6 +52,12 @@ func main() {
 			maxIdleConns: env.GetIntEnv("DB_MAX_IDLE_CONNS", 10),
 			maxIdleTIme:  env.GetTimeEnv("DB_MAX_IDLE_TIME", 15*time.Minute),
 		},
+		redisConfig: redisConfig{
+			addr: env.GetStringEnv("REDIS_ADDR","127.0.0.1:6379"),
+			password: env.GetStringEnv("REDIS_PASSWORD",""),
+			db: env.GetIntEnv("REDIS_DB",0),
+			enabled: false,
+		},
 		env: env.GetStringEnv("ENV", "development"),
 		mail: mailConfig{
 			exp: 3 * 3 * time.Hour,
@@ -67,6 +77,11 @@ func main() {
 				iss: "go-cms",
 			},
 		},
+		rateLimiter: ratelimiter.Config{
+			RequestPerTimeFrame: env.GetIntEnv("RATELIMITER_REQUESTS_COUNT", 20),
+			TimeFrame: time.Second*5,
+			Enabled: true,
+		},
 	}
 
 	db, err := db.New(
@@ -80,7 +95,20 @@ func main() {
 	}
 	defer db.Close()
 	logger.Info("connected to Db!")
+
+	var redisDB *redis.Client
+	if config.redisConfig.enabled {
+		redisDB = cache.NewRedisClient(config.redisConfig.addr, config.redisConfig.password, config.redisConfig.db)
+		logger.Info("redis connection established")
+	}
+
+	rateLimiter := ratelimiter.NewFixedWindowLimiter(
+		config.rateLimiter.RequestPerTimeFrame,
+		config.rateLimiter.TimeFrame,
+	)
+
 	store := store.NewStrorage(db)
+	cacheStorage := cache.NewRedisStorage(redisDB)
 
 	mailer := mailer.NewSendGRid(config.mail.sendGrid.apiKey, config.mail.fromEmail)
 
@@ -91,7 +119,14 @@ func main() {
 		logger: logger,
 		mailer: mailer,
 		authenticator: jwtAuthenticator,
+		cacheStorage: cacheStorage,
+		rateLimiter: rateLimiter,
 	}
+
+	expvar.NewString("version").Set("v1")
+	expvar.Publish("database", expvar.Func(func() any {
+		return db.Stats()
+	}))
 
 	logger.Fatal(api.run(api.muxHandler()))
 }
