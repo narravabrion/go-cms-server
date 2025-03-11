@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/narravabrion/go-cms-server/compare/v1.1.0...v1.2.0) (2025-03-11)
+
+
+### Features
+
+* add dockerfile ([877a12e](https://github.com/narravabrion/go-cms-server/commit/877a12e01be6094a4d80b07025122cb87d9a25f7))
+
 ## [1.1.0](https://github.com/narravabrion/go-cms-server/compare/v1.0.0...v1.1.0) (2025-03-11)
 
 
