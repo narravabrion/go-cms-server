@@ -18,6 +18,7 @@ type api struct {
 type config struct {
 	addr string
 	db   dbConfig
+	env  string
 }
 
 type dbConfig struct {
@@ -39,6 +40,28 @@ func (api *api) muxHandler() http.Handler {
 
 	r.Route("/v1", func(r chi.Router) {
 		r.Get("/health", api.healthCheckHandler)
+		r.Route("/posts", func(r chi.Router) {
+			r.Post("/", api.createPostHandler)
+			r.Route("/{postID}", func(r chi.Router) {
+				r.Use(api.postContextMiddleware)
+				r.Get("/", api.getPostHandler)
+				r.Delete("/", api.deletePostHandler)
+				r.Patch("/", api.updatePostHandler)
+			})
+		})
+		r.Route("/users", func(r chi.Router) {
+			r.Route("/{userID}", func(r chi.Router) {
+				r.Use(api.userContextMiddleware)
+				r.Get("/", api.getUserHandler)
+				r.Delete("/", api.deleteUserHandler)
+				r.Patch("/", api.updateUserHandler)
+				r.Put("/follow", api.followUserHandler)
+				r.Put("/unfollow", api.unfollowUserHandler)
+			})
+			r.Group(func(r chi.Router){
+				r.Get("/feed", api.getUserFeedHandler)
+			})
+		})
 	})
 
 	return r
