@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/narravabrion/go-cms-server/compare/v1.0.0...v1.1.0) (2025-03-11)
+
+
+### Features
+
+* update api version ([b69eddf](https://github.com/narravabrion/go-cms-server/commit/b69eddfbdaded616ca581887c500046d9e720e3c))
+
 ## 1.0.0 (2025-03-11)
 
 
