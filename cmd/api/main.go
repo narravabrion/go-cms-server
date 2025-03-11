@@ -16,6 +16,7 @@ import (
 	"go.uber.org/zap"
 )
 
+const version = "0.0.1"
 //	@title			go cms server
 //	@version		1.0
 //	@description	Thi is a simple blog cms.
@@ -123,7 +124,7 @@ func main() {
 		rateLimiter: rateLimiter,
 	}
 
-	expvar.NewString("version").Set("v1")
+	expvar.NewString("version").Set(version)
 	expvar.Publish("database", expvar.Func(func() any {
 		return db.Stats()
 	}))
